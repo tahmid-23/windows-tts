@@ -1,0 +1,23 @@
+[package]
+name = "windows_tts"
+description = "A simple app that makes use of Windows' TTS features."
+license = "MIT OR Apache-2.0"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+futures = "0.3.24"
+
+[dependencies.clap]
+version = "3.2.22"
+features = ["derive"]
+
+[dependencies.windows]
+version = "0.41.0"
+features = [
+    "Foundation",
+    "Media_Core",
+    "Media_Playback",
+    "Media_SpeechSynthesis",
+    "Storage_Streams"
+]
