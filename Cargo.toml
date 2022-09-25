@@ -1,9 +1,12 @@
 [package]
 name = "windows_tts"
-description = "A simple app that makes use of Windows' TTS features."
-license = "MIT OR Apache-2.0"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
+description = "A simple app that makes use of Windows' TTS features."
+homepage = "https://github.com/tahmid-23/windows_tts"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/tahmid-23/windows_tts"
 
 [dependencies]
 futures = "0.3.24"
