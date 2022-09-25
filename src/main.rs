@@ -51,10 +51,10 @@ impl Display for NoFileName {
 impl Error for NoFileName {}
 
 async fn get_file(path: &Path) -> Result<StorageFile> {
-    let folder_path = HSTRING::from(path.parent().ok_or_else(|| NoPathParent)?.as_os_str());
+    let folder_path = HSTRING::from(path.parent().ok_or(NoPathParent)?.as_os_str());
     let folder = StorageFolder::GetFolderFromPathAsync(&folder_path)?.await?;
 
-    let file_name = &HSTRING::from(path.file_name().ok_or_else(|| NoFileName)?);
+    let file_name = HSTRING::from(path.file_name().ok_or(NoFileName)?);
     Ok(folder.CreateFileAsync(&file_name, CreationCollisionOption::ReplaceExisting)?.await?)
 }
 
