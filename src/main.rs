@@ -17,7 +17,7 @@ use windows::Storage::{CreationCollisionOption, FileIO, StorageFile, StorageFold
 use windows::Storage::Streams::{DataReader, IBuffer, InMemoryRandomAccessStream, IRandomAccessStream, IRandomAccessStreamWithContentType};
 
 use crate::cli::Cli;
-use crate::error::{NoFileName, NoPathParent};
+use crate::error::{NoFileName, NoPathParent, TranscodeFailed};
 use crate::format::Format;
 
 mod cli;
@@ -48,14 +48,26 @@ async fn buffer_from_stream(stream: &IRandomAccessStream) -> Result<IBuffer> {
 }
 
 fn choose_profile(format: &Format) -> Result<Option<MediaEncodingProfile>> {
-    match format {
-        Format::WAV => {
-            Ok(None)
+    Ok(match format {
+        Format::ALAC => {
+            Some(MediaEncodingProfile::CreateAlac(AudioEncodingQuality::default())?)
+        }
+        Format::FLAC => {
+            Some(MediaEncodingProfile::CreateFlac(AudioEncodingQuality::default())?)
+        }
+        Format::M4A => {
+            Some(MediaEncodingProfile::CreateM4a(AudioEncodingQuality::default())?)
         }
         Format::MP3 => {
-            Ok(Some(MediaEncodingProfile::CreateMp3(AudioEncodingQuality::default())?))
+            Some(MediaEncodingProfile::CreateMp3(AudioEncodingQuality::default())?)
         }
-    }
+        Format::WAV => {
+            None
+        }
+        Format::WMA => {
+            Some(MediaEncodingProfile::CreateWma(AudioEncodingQuality::default())?)
+        }
+    })
 }
 
 async fn create_synth_text_buffer(message: &str, format: &Format) -> Result<IBuffer> {
@@ -69,9 +81,11 @@ async fn create_synth_text_buffer(message: &str, format: &Format) -> Result<IBuf
             let transcode_result: windows::Media::Transcoding::PrepareTranscodeResult = transcoder.PrepareStreamTranscodeAsync(&input_stream, &output_stream, &profile)?.await?;
 
             if transcode_result.CanTranscode()? {
-                transcode_result.TranscodeAsync()?.await?
+                transcode_result.TranscodeAsync()?.await?;
+                buffer_from_stream(&output_stream).await
+            } else {
+                Err(Box::new(TranscodeFailed))
             }
-            buffer_from_stream(&output_stream).await // TODO
         }
         None => {
             buffer_from_stream(&IRandomAccessStream::try_from(input_stream)?).await

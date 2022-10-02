@@ -363,7 +363,7 @@ checksum = "84c12f65daa39dd2babe6e442988fc329d6243fdce47d7d2d155b8d874862246"
 
 [[package]]
 name = "windows_tts"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "clap",
  "futures",

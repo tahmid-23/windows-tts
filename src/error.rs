@@ -22,3 +22,14 @@ impl Display for NoFileName {
 }
 
 impl Error for NoFileName {}
+
+#[derive(Debug)]
+pub(crate) struct TranscodeFailed;
+
+impl Display for TranscodeFailed {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "failed to transcode stream")
+    }
+}
+
+impl Error for TranscodeFailed {}
