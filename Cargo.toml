@@ -1,6 +1,6 @@
 [package]
 name = "windows_tts"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 description = "A simple app that makes use of Windows' TTS features."
 homepage = "https://github.com/tahmid-23/windows_tts"
@@ -12,15 +12,17 @@ repository = "https://github.com/tahmid-23/windows_tts"
 futures = "0.3.24"
 
 [dependencies.clap]
-version = "3.2.22"
+version = "4.0.8"
 features = ["derive"]
 
 [dependencies.windows]
-version = "0.41.0"
+version = "0.42.0"
 features = [
     "Foundation",
     "Media_Core",
+    "Media_MediaProperties",
     "Media_Playback",
     "Media_SpeechSynthesis",
+    "Media_Transcoding",
     "Storage_Streams"
 ]
