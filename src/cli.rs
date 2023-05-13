@@ -5,9 +5,8 @@ use clap::{Args, Parser};
 use crate::format::Format;
 
 #[derive(Parser)]
-#[command(name = "WindowsTTS", version, about)]
+#[command(name = "windows-tts", version, about)]
 pub(crate) struct Cli {
-
     /// The format of the input
     #[command(flatten)]
     pub input: Input,
@@ -22,7 +21,7 @@ pub(crate) struct Cli {
 
     /// Whether to use SSML synthesis
     #[arg(long, default_value_t = false)]
-    pub ssml: bool
+    pub ssml: bool,
 }
 
 #[derive(Args)]

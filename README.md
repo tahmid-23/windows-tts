@@ -1,4 +1,4 @@
-# WindowsTTS
+# windows-tts
 A simple app that makes use of Windows' TTS features.  
 Uses WinRT libraries, so it should work on Windows 8+ (only tested on Windows 11).
 
@@ -6,7 +6,7 @@ Uses WinRT libraries, so it should work on Windows 8+ (only tested on Windows 11
 Build the executable with `cargo build --release`.  
 Run with `cargo run`.
 
-Run `.\windows_tts.exe --help` for usage information. 
+Run `.\windows-tts.exe --help` for usage information. 
 
 ## License
 

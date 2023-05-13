@@ -7,5 +7,5 @@ pub(crate) enum Format {
     M4A,
     MP3,
     WAV,
-    WMA
+    WMA,
 }
