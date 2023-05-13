@@ -45,9 +45,15 @@ async fn get_file(path: &Path) -> Result<StorageFile> {
     Ok(folder.GetFileAsync(&file_name)?.await?)
 }
 
-async fn create_synth_text_stream(message: &HSTRING) -> Result<IRandomAccessStreamWithContentType> {
+async fn create_synth_text_stream(message: &HSTRING, ssml: bool) -> Result<IRandomAccessStreamWithContentType> {
     let synth = SpeechSynthesizer::new()?;
-    Ok(synth.SynthesizeTextToStreamAsync(message)?.await?.cast()?)
+    let stream_result_operation = if ssml {
+        synth.SynthesizeSsmlToStreamAsync(message)
+    } else {
+        synth.SynthesizeTextToStreamAsync(message)
+    };
+
+    Ok(stream_result_operation?.await?.cast()?)
 }
 
 async fn buffer_from_stream(stream: &IRandomAccessStream) -> Result<IBuffer> {
@@ -58,8 +64,8 @@ async fn buffer_from_stream(stream: &IRandomAccessStream) -> Result<IBuffer> {
     Ok(reader.ReadBuffer(stream_size)?)
 }
 
-fn choose_profile(format: &Format) -> Result<Option<MediaEncodingProfile>> {
-    Ok(match format {
+fn choose_profile(output_format: &Format) -> Result<Option<MediaEncodingProfile>> {
+    Ok(match output_format {
         Format::ALAC => {
             Some(MediaEncodingProfile::CreateAlac(AudioEncodingQuality::default())?)
         }
@@ -81,8 +87,8 @@ fn choose_profile(format: &Format) -> Result<Option<MediaEncodingProfile>> {
     })
 }
 
-async fn create_synth_text_buffer(message: &HSTRING, format: &Format) -> Result<IBuffer> {
-    let input_stream = create_synth_text_stream(message).await?;
+async fn create_synth_text_buffer(message: &HSTRING, format: &Format, ssml: bool) -> Result<IBuffer> {
+    let input_stream = create_synth_text_stream(message, ssml).await?;
 
     let profile = choose_profile(format)?;
     match profile {
@@ -104,9 +110,9 @@ async fn create_synth_text_buffer(message: &HSTRING, format: &Format) -> Result<
     }
 }
 
-async fn speak_to_file(message: &HSTRING, path: &Path, output_format: &Format) -> Result<()> {
+async fn speak_to_file(message: &HSTRING, path: &Path, output_format: &Format, ssml: bool) -> Result<()> {
     let file_future = create_file(path);
-    let synth_text_buffer_future = create_synth_text_buffer(message, output_format);
+    let synth_text_buffer_future = create_synth_text_buffer(message, output_format, ssml);
 
     let results = future::join(file_future, synth_text_buffer_future).await;
     FileIO::WriteBufferAsync(&results.0?, &results.1?)?.await?;
@@ -114,10 +120,10 @@ async fn speak_to_file(message: &HSTRING, path: &Path, output_format: &Format) -
     Ok(())
 }
 
-async fn speak_to_media_player(message: &HSTRING) -> Result<()> {
+async fn speak_to_media_player(message: &HSTRING, ssml: bool) -> Result<()> {
     let media_player = MediaPlayer::new()?;
 
-    let synth_stream = create_synth_text_stream(message).await?;
+    let synth_stream = create_synth_text_stream(message, ssml).await?;
     let source = MediaSource::CreateFromStream(&synth_stream, &synth_stream.ContentType()?)?;
 
     let (tx, rx) = channel();
@@ -157,10 +163,10 @@ fn main() -> Result<()> {
                 Ok(current) => current.join(path),
                 Err(_) => path
             };
-            block_on(speak_to_file(&input_text, &adjusted_path, &args.format))
+            block_on(speak_to_file(&input_text, &adjusted_path, &args.format, args.ssml))
         }
         None => {
-            block_on(speak_to_media_player(&input_text))
+            block_on(speak_to_media_player(&input_text, args.ssml))
         }
     }
 }

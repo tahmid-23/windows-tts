@@ -19,6 +19,10 @@ pub(crate) struct Cli {
     /// The format of the output file
     #[arg(short, long, value_enum, default_value_t = crate::format::Format::WAV)]
     pub format: Format,
+
+    /// Whether to use SSML synthesis
+    #[arg(long, default_value_t = false)]
+    pub ssml: bool
 }
 
 #[derive(Args)]
