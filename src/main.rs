@@ -6,14 +6,14 @@ use std::sync::mpsc::channel;
 use clap::Parser;
 use futures::executor::block_on;
 use futures::future;
-use windows::core::HSTRING;
+use windows::core::{ComInterface, HSTRING};
 use windows::Foundation::TypedEventHandler;
 use windows::Media::Core::MediaSource;
 use windows::Media::MediaProperties::{AudioEncodingQuality, MediaEncodingProfile};
 use windows::Media::Playback::MediaPlayer;
 use windows::Media::SpeechSynthesis::SpeechSynthesizer;
 use windows::Media::Transcoding::MediaTranscoder;
-use windows::Storage::{CreationCollisionOption, FileIO, StorageFile, StorageFolder};
+use windows::Storage::{CreationCollisionOption, FileIO, IStorageFolder, StorageFile, StorageFolder};
 use windows::Storage::Streams::{DataReader, IBuffer, InMemoryRandomAccessStream, IRandomAccessStream, IRandomAccessStreamWithContentType};
 
 use crate::cli::Cli;
@@ -26,17 +26,28 @@ mod format;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-async fn get_file(path: &Path) -> Result<StorageFile> {
+async fn get_folder_and_file_name(path: &Path) -> Result<(IStorageFolder, HSTRING)> {
     let folder_path = HSTRING::from(path.parent().ok_or(NoPathParent)?.as_os_str());
-    let folder = StorageFolder::GetFolderFromPathAsync(&folder_path)?.await?;
 
+    let folder = StorageFolder::GetFolderFromPathAsync(&folder_path)?.await?.cast::<IStorageFolder>()?;
     let file_name = HSTRING::from(path.file_name().ok_or(NoFileName)?);
+
+    return Ok((folder, file_name));
+}
+
+async fn create_file(path: &Path) -> Result<StorageFile> {
+    let (folder, file_name) = get_folder_and_file_name(path).await?;
     Ok(folder.CreateFileAsync(&file_name, CreationCollisionOption::ReplaceExisting)?.await?)
 }
 
-async fn create_synth_text_stream(message: &str) -> Result<IRandomAccessStreamWithContentType> {
+async fn get_file(path: &Path) -> Result<StorageFile> {
+    let (folder, file_name) = get_folder_and_file_name(path).await?;
+    Ok(folder.GetFileAsync(&file_name)?.await?)
+}
+
+async fn create_synth_text_stream(message: &HSTRING) -> Result<IRandomAccessStreamWithContentType> {
     let synth = SpeechSynthesizer::new()?;
-    Ok(IRandomAccessStreamWithContentType::try_from(synth.SynthesizeTextToStreamAsync(&HSTRING::from(message))?.await?)?)
+    Ok(synth.SynthesizeTextToStreamAsync(message)?.await?.cast()?)
 }
 
 async fn buffer_from_stream(stream: &IRandomAccessStream) -> Result<IBuffer> {
@@ -70,15 +81,15 @@ fn choose_profile(format: &Format) -> Result<Option<MediaEncodingProfile>> {
     })
 }
 
-async fn create_synth_text_buffer(message: &str, format: &Format) -> Result<IBuffer> {
+async fn create_synth_text_buffer(message: &HSTRING, format: &Format) -> Result<IBuffer> {
     let input_stream = create_synth_text_stream(message).await?;
 
     let profile = choose_profile(format)?;
     match profile {
         Some(profile) => {
-            let transcoder: MediaTranscoder = MediaTranscoder::new()?;
-            let output_stream = IRandomAccessStream::try_from(InMemoryRandomAccessStream::new()?)?;
-            let transcode_result: windows::Media::Transcoding::PrepareTranscodeResult = transcoder.PrepareStreamTranscodeAsync(&input_stream, &output_stream, &profile)?.await?;
+            let transcoder = MediaTranscoder::new()?;
+            let output_stream = InMemoryRandomAccessStream::new()?.cast::<IRandomAccessStream>()?;
+            let transcode_result = transcoder.PrepareStreamTranscodeAsync(&input_stream, &output_stream, &profile)?.await?;
 
             if transcode_result.CanTranscode()? {
                 transcode_result.TranscodeAsync()?.await?;
@@ -88,25 +99,22 @@ async fn create_synth_text_buffer(message: &str, format: &Format) -> Result<IBuf
             }
         }
         None => {
-            buffer_from_stream(&IRandomAccessStream::try_from(input_stream)?).await
+            buffer_from_stream(&input_stream.cast()?).await
         }
     }
 }
 
-async fn speak_to_file(message: &str, path: &Path, output_format: &Format) -> Result<()> {
-    let file_future = get_file(path);
+async fn speak_to_file(message: &HSTRING, path: &Path, output_format: &Format) -> Result<()> {
+    let file_future = create_file(path);
     let synth_text_buffer_future = create_synth_text_buffer(message, output_format);
 
-
     let results = future::join(file_future, synth_text_buffer_future).await;
-    let file = results.0?;
-    let buffer = results.1?;
-    FileIO::WriteBufferAsync(&file, &buffer)?.await?;
+    FileIO::WriteBufferAsync(&results.0?, &results.1?)?.await?;
 
     Ok(())
 }
 
-async fn speak_to_media_player(message: &str) -> Result<()> {
+async fn speak_to_media_player(message: &HSTRING) -> Result<()> {
     let media_player = MediaPlayer::new()?;
 
     let synth_stream = create_synth_text_stream(message).await?;
@@ -128,16 +136,31 @@ async fn speak_to_media_player(message: &str) -> Result<()> {
 
 fn main() -> Result<()> {
     let args = Cli::parse();
+    let input_text = match args.input.message {
+        Some(message) => {
+            HSTRING::from(message)
+        }
+        None => {
+            let adjusted_path = match current_dir() {
+                Ok(current) => current.join(args.input.input.unwrap()),
+                Err(_) => args.input.input.unwrap()
+            };
+
+            let file = block_on(get_file(&adjusted_path))?;
+            block_on(FileIO::ReadTextAsync(&file)?)?
+        }
+    };
+
     match args.output {
         Some(path) => {
             let adjusted_path = match current_dir() {
                 Ok(current) => current.join(path),
                 Err(_) => path
             };
-            block_on(speak_to_file(&args.message, &adjusted_path, &args.format))
+            block_on(speak_to_file(&input_text, &adjusted_path, &args.format))
         }
         None => {
-            block_on(speak_to_media_player(&args.message))
+            block_on(speak_to_media_player(&input_text))
         }
     }
 }
